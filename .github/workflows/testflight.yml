@@ -1,0 +1,88 @@
+# Builds the iPhone app on GitHub's Mac and sends it to TestFlight.
+# Runs on every push to main, or by hand: Actions tab > "Build iPhone app" > Run workflow.
+# Without the 4 Apple secrets it still builds (to check the code) but doesn't upload.
+name: Build iPhone app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use the newest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Make the Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build (unsigned)
+        run: |
+          xcodebuild archive \
+            -project MKmusic.xcodeproj \
+            -scheme MKmusic \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/MKmusic.xcarchive \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            | tail -40
+          test -d build/MKmusic.xcarchive/Products/Applications/MKmusic.app
+
+      - name: Check Apple secrets
+        id: secrets
+        run: |
+          if [ -n "$ASC_KEY_ID" ] && [ -n "$ASC_ISSUER_ID" ] && [ -n "$ASC_KEY_P8" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Apple secrets not added yet - built OK, but not sent to TestFlight."
+          fi
+
+      - name: Sign and send to TestFlight
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          printf '%s\n' "$ASC_KEY_P8" > "$KEY_PATH"
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath build/MKmusic.xcarchive \
+            -exportPath build/export \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          rm -f "$KEY_PATH"
+          echo "### Sent build $BUILD_NUMBER to TestFlight" >> "$GITHUB_STEP_SUMMARY"
+          echo "It shows up in App Store Connect > TestFlight in about 10-30 minutes." >> "$GITHUB_STEP_SUMMARY"
