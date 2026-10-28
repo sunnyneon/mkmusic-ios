@@ -7,6 +7,8 @@ A small iPhone app that opens the fan app at **mkmusic.app/app** — the same sc
   Premium members still get everything when they sign in.
 - Links to other websites open in Safari.
 - Shows a "Try again" screen when there's no internet.
+- Offline: Premium members can download songs (stored by the website code in the app's storage).
+  `WKAppBoundDomains` in Info.plist turns on the website's service worker inside the app, so it opens with no internet.
 
 ## How it gets built (no Mac needed)
 

@@ -30,7 +30,10 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
-        config.websiteDataStore = .default() // keeps fans signed in
+        config.websiteDataStore = .default() // keeps fans signed in and keeps downloaded songs
+        // "App-bound domains" (WKAppBoundDomains in Info.plist) switch on the website's offline
+        // helper (service worker), so the app opens and downloaded songs play with no internet.
+        config.limitsNavigationsToAppBoundDomains = true
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
         config.applicationNameForUserAgent = "Mobile/15E148 Safari/604.1 MKmusic-iOS/\(version)"
 
@@ -130,6 +133,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let e = error as NSError
         if e.domain == NSURLErrorDomain && e.code == NSURLErrorCancelled { return }
         if e.domain == "WebKitErrorDomain" && (e.code == 102 || e.code == 204) { return } // link handed to Safari / media
+        if e.domain == WKError.errorDomain { return } // a blocked outside page, not a lost connection
         offlineView.isHidden = false
     }
 

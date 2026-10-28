@@ -24,6 +24,15 @@
 	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>WKAppBoundDomains</key>
+	<array>
+		<string>mkmusic.app</string>
+		<string>www.mkmusic.app</string>
+		<string>www.youtube-nocookie.com</string>
+		<string>youtube-nocookie.com</string>
+		<string>www.youtube.com</string>
+		<string>youtube.com</string>
+	</array>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.music</string>
 	<key>UIBackgroundModes</key>
